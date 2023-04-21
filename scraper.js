@@ -1,9 +1,10 @@
 
 import { chromium } from 'playwright';
-import fs from 'fs';
+import excel from 'exceljs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const url = 'https://ubuntu.com/security/notices';
-const fileName = 'notices.csv';
 let run = true
 let notices = [];
 
@@ -24,12 +25,21 @@ const browser = await chromium.launch({
 });
 
 const page = await browser.newPage();
-const baseUrl = new URL(page.url()).origin;
 
 await page.goto(url);
+const baseUrl = new URL(page.url()).origin;
 
 await page.getByRole('button', {name: 'Accept all and visit site'}).click()
 
+
+const workbook = new excel.Workbook();
+const worksheet = workbook.addWorksheet('Ubuntu');
+
+worksheet.columns = [
+    {key: 'link', header: 'Link', width: 50},
+    {key: 'date', header: 'Date', width: 20}
+
+]
 
 while(run){
 
@@ -55,12 +65,17 @@ while(run){
     await next.click()
 }
 
-fs.writeFileSync(fileName, 'Link,Date\n');
-
-
 notices.sort((a1, a2) => a1.date - a2.date ).forEach((n) => {
-    let row = `<a href="${baseUrl}${n.href}">${n.name}</a>,${n.date.toISOString().split('T')[0]}\n`;
-    fs.appendFileSync(fileName, row);
+    worksheet.addRow({
+        link: {text: n.name, hyperlink: `${baseUrl}${n.href}`},
+        date: n.date.toISOString().split('T')[0]
+    })
 });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const exportPath = path.resolve(__dirname, 'notices.xlsx');
+
+await workbook.xlsx.writeFile(exportPath);
 
 await browser.close();
